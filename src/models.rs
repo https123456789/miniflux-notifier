@@ -12,4 +12,6 @@ pub struct Entries {
 pub struct Entry {
     pub id: u32,
     pub title: String,
+    pub author: String,
+    pub hash: String,
 }
