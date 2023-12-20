@@ -6,7 +6,7 @@ use tracing::{error, info};
 
 mod models;
 
-use crate::models::{Entry, Entries};
+use crate::models::{Entries, Entry};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -49,7 +49,11 @@ async fn main() -> Result<()> {
 
             if let Ok(first_new_index) = first_new_index {
                 if first_new_index != 0 {
-                    send_notification_batch(&unread_entries.entries[0..first_new_index + 1]);
+                    let nb =
+                        send_notification_batch(&unread_entries.entries[0..first_new_index + 1]);
+                    if nb.is_err() {
+                        error!("{:?}", nb);
+                    }
                 }
             } else {
                 error!("{:?}", first_new_index);
@@ -102,7 +106,9 @@ async fn get_unread_entries(server: &String, auth_token: &String) -> Result<Entr
 /// exhausted, then everything in the unread entry list is "new".
 fn find_new_entries(cache: &Vec<Entry>, new: &Vec<Entry>) -> Result<usize> {
     if new.is_empty() {
-        return Err(anyhow::anyhow!("No entries provided when searching for new entries"));
+        return Err(anyhow::anyhow!(
+            "No entries provided when searching for new entries"
+        ));
     }
 
     for cached_entry in cache {
