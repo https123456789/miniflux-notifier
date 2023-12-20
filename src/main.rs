@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
     }
 
     loop {
-        sleep(Duration::new(1, 0)).await;
+        sleep(Duration::new(60, 0)).await;
 
         let unread_entries = get_unread_entries(&args.server, &args.miniflux_api_key).await;
 
@@ -49,8 +49,7 @@ async fn main() -> Result<()> {
 
             if let Ok(first_new_index) = first_new_index {
                 if first_new_index != 0 {
-                    let new_entries = &unread_entries.entries[0..first_new_index + 1];
-                    println!("{:?}", new_entries);
+                    send_notification_batch(&unread_entries.entries[0..first_new_index + 1]);
                 }
             } else {
                 error!("{:?}", first_new_index);
@@ -117,4 +116,15 @@ fn find_new_entries(cache: &Vec<Entry>, new: &Vec<Entry>) -> Result<usize> {
 
     // Everything must be "new" then
     Ok(0)
+}
+
+fn send_notification_batch(entries: &[Entry]) -> Result<()> {
+    for entry in entries {
+        Notification::new()
+            .summary(format!("New RSS Entry from {}", &entry.author).as_str())
+            .body(&entry.title)
+            .show()?;
+    }
+
+    Ok(())
 }
