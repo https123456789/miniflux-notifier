@@ -14,6 +14,11 @@ struct Args {
     /// The fully qualified URL to the Miniflux server
     server: String,
 
+    /// The wait period between each check in minutes
+    #[clap(default_value = "60")]
+    wait_period: u64,
+
+    /// The API key used to authenticate with the Miniflux server
     #[clap(long, env)]
     miniflux_api_key: String,
 }
@@ -22,6 +27,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let mut entries_cache: Option<Entries> = None;
 
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
     env_logger::init();
 
     let server_check = check_for_server_existence(&args.server);
@@ -31,9 +39,11 @@ fn main() -> Result<()> {
         );
     }
 
+    info!("Server check passed. Beginning main loop.");
+
     loop {
         if entries_cache.is_some() {
-            thread::sleep(Duration::new(10, 0));
+            thread::sleep(Duration::new(60 * args.wait_period, 0));
         }
 
         let unread_entries = get_unread_entries(&args.server, &args.miniflux_api_key);
@@ -44,6 +54,8 @@ fn main() -> Result<()> {
         }
 
         let unread_entries = unread_entries.unwrap();
+
+        info!("Unread entries: {}", unread_entries.entries.len());
 
         // Don't consider any "new" entries when there is no cache
         if let Some(entries_cache) = entries_cache {
