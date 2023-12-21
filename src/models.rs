@@ -14,4 +14,11 @@ pub struct Entry {
     pub title: String,
     pub author: String,
     pub hash: String,
+    pub feed: Feed,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Feed {
+    pub title: String,
 }

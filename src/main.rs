@@ -1,8 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
+use futures::future::join_all;
+use futures::FutureExt;
 use notify_rust::Notification;
 use tokio::time::{sleep, Duration};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 mod models;
 
@@ -32,7 +34,9 @@ async fn main() -> Result<()> {
     }
 
     loop {
-        sleep(Duration::new(60, 0)).await;
+        if entries_cache.is_some() {
+            sleep(Duration::new(10, 0)).await;
+        }
 
         let unread_entries = get_unread_entries(&args.server, &args.miniflux_api_key).await;
 
@@ -50,7 +54,8 @@ async fn main() -> Result<()> {
             if let Ok(first_new_index) = first_new_index {
                 if first_new_index != 0 {
                     let nb =
-                        send_notification_batch(&unread_entries.entries[0..first_new_index + 1]);
+                        send_notification_batch(&unread_entries.entries[0..first_new_index + 1])
+                            .await;
                     if nb.is_err() {
                         error!("{:?}", nb);
                     }
@@ -104,6 +109,7 @@ async fn get_unread_entries(server: &String, auth_token: &String) -> Result<Entr
 /// are "new". If we don't find a match, we repeat the process using the second entry in
 /// the cache and continue in this manner. If every entry in the cache has been
 /// exhausted, then everything in the unread entry list is "new".
+#[tracing::instrument(skip(cache, new))]
 fn find_new_entries(cache: &Vec<Entry>, new: &Vec<Entry>) -> Result<usize> {
     if new.is_empty() {
         return Err(anyhow::anyhow!(
@@ -115,7 +121,7 @@ fn find_new_entries(cache: &Vec<Entry>, new: &Vec<Entry>) -> Result<usize> {
         for (i, new_entry) in new.iter().enumerate() {
             // Found first "new" entry
             if cached_entry.hash == new_entry.hash {
-                return Ok(i);
+                return Ok(1);
             }
         }
     }
@@ -124,13 +130,66 @@ fn find_new_entries(cache: &Vec<Entry>, new: &Vec<Entry>) -> Result<usize> {
     Ok(0)
 }
 
-fn send_notification_batch(entries: &[Entry]) -> Result<()> {
+#[tracing::instrument(skip(entries))]
+async fn send_notification_batch(entries: &[Entry]) -> Result<()> {
+    debug!("Got {} entries", entries.len());
+    let mut notifs = vec![];
+    let mut tasks = vec![];
+
+    // Due to lifetime constraints, we must create a vector of all the notifications first before
+    // we can show then and await any potential actions
     for entry in entries {
-        Notification::new()
-            .summary(format!("New RSS Entry from {}", &entry.author).as_str())
+        let source = match &entry.author.is_empty() {
+            true => &entry.feed.title,
+            false => &entry.author,
+        };
+        let notif = Notification::new()
+            .summary(format!("New RSS Entry from {}", source).as_str())
             .body(&entry.title)
-            .show()?;
+            .action("open", "Open in web browser")
+            .finalize();
+        notifs.push(notif);
     }
+
+    // Now we can iterate through all of the notifications, show them and setup any handlers for
+    // actions
+    for (i, notif) in notifs.iter().enumerate() {
+        let entry = Box::new(&entries[i]);
+        let task = notif.show_async()
+            .then(|handle| async move {
+                debug!("Notif shown");
+                match handle {
+                    Ok(handle) => {
+                        debug!("^Action");
+                        handle.wait_for_action(move |action| {
+                            debug!("Action");
+                            #[allow(clippy::single_match)]
+                            let res = match action {
+                                "open" => open::that_detached(&entry.url),
+                                _ => Ok(())
+                            };
+
+                            debug!("Action~");
+
+                            if let Err(e) = res {
+                                error!("{:?}", e);
+                            }
+                        });
+                        Ok(())
+                    },
+                    Err(e) => Err(e)
+                }
+            });
+        tasks.push(task);
+    }
+
+    for result in join_all(tasks).await {
+        if let Err(e) = result {
+            error!("{:?}", e);
+        }
+    }
+
+    debug!("exiting");
 
     Ok(())
 }
