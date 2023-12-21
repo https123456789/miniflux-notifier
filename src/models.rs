@@ -2,13 +2,13 @@
 
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Entries {
     pub total: u32,
     pub entries: Vec<Entry>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Entry {
     pub id: u32,
     pub title: String,
@@ -18,7 +18,7 @@ pub struct Entry {
     pub url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Feed {
     pub title: String,
 }
