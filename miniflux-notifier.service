@@ -1,0 +1,7 @@
+[Service]
+Type=idle
+# Change the URL to where ever your Miniflux server is running
+ExecStart=/path/to/miniflux-notifier 'http://localhost:8080'
+
+[Install]
+WantedBy=graphical-session.target
