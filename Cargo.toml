@@ -8,11 +8,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.75"
 clap = { version = "4.4.11", features = ["derive", "env"] }
-futures = "0.3.29"
+env_logger = "0.10.1"
+log = "0.4.20"
 notify-rust = "4.10.0"
 open = "5.0.1"
-reqwest = { version = "0.11.23", features = ["json"] }
+reqwest = { version = "0.11.23", features = ["json", "blocking"] }
 serde = { version = "1.0.193", features = ["derive"] }
-tokio = { version = "1.35.1", features = ["full"] }
-tracing = { version = "0.1.40", features = ["async-await"] }
-tracing-subscriber = "0.3.18"
